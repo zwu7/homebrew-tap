@@ -18,7 +18,7 @@ cask "buzz-captions" do
   desc "Offline audio transcription and translation app powered by Whisper"
   homepage "https://github.com/chidiwilliams/buzz"
 
-  depends_on macos: ">= :catalina"
+  depends_on macos: :catalina
 
   app "Buzz.app"
 
