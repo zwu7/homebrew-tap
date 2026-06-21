@@ -19,7 +19,7 @@ cask "srware-iron" do
     sha256 "8c649dc4016f504028f5ef6ad00e88bd25276e2e25dec4af8376f7aac1503a76"
   end
   
-  depends_on macos: ">= :catalina"
+  depends_on macos: :catalina
   
   app "Iron.app"
   
