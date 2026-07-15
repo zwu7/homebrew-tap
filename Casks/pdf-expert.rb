@@ -1,20 +1,35 @@
 cask "pdf-expert" do
-  version "2.5.21,761"
-  sha256 "7906dc0b154c928a2b6c5c341336a1fec5f9c6ba059de08b8c91eca160f94ff6"
+  version "2,764"
+  sha256 :no_check
 
-  url "https://d1ke680phyeohy.cloudfront.net/versions/#{version.csv.second}/PDFExpert.dmg",
-      verified: "d1ke680phyeohy.cloudfront.net/versions/"
+  url "https://downloads.pdfexpert.com/versions/#{version.csv.second}/PDFExpert.zip",
+      verified: "downloads.pdfexpert.com/versions/"
   name "PDF Expert"
   desc "PDF reader, editor and annotator"
   homepage "https://pdfexpert.com/"
 
   livecheck do
-    url "https://d1ke680phyeohy.cloudfront.net/release/appcast.xml"
-    strategy :sparkle
+    skip "Pinned legacy PDF Expert 2 build before PDF Expert 3 account/subscription line"
   end
 
-  auto_updates true
-  conflicts_with cask: "homebrew/cask-versions/pdf-expert-beta"
+  auto_updates false
+  depends_on macos: ">= :high_sierra"
+
+  conflicts_with cask: [
+    "homebrew/cask/pdf-expert",
+    "homebrew/cask-versions/pdf-expert-beta",
+  ]
 
   app "PDF Expert.app"
+
+  zap trash: [
+    "~/Library/Application Support/com.readdle.PDFExpert-Mac",
+    "~/Library/Application Support/PDF Expert",
+    "~/Library/Caches/com.readdle.PDFExpert-Mac",
+    "~/Library/HTTPStorages/com.readdle.PDFExpert-Mac",
+    "~/Library/HTTPStorages/com.readdle.PDFExpert-Mac.binarycookies",
+    "~/Library/PDF Expert",
+    "~/Library/Preferences/com.readdle.PDFExpert-Mac.plist",
+    "~/Library/Saved Application State/com.readdle.PDFExpert-Mac.savedState",
+  ]
 end
