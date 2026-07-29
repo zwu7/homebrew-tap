@@ -16,29 +16,26 @@ cask "mercury-browser" do
     regex(%r{href=.*?/v\.(\d+(?:\.\d+)+)/mercury-\1_mac_ARM64\.dmg}i)
   end
 
+  depends_on :macos
+  depends_on arch: :arm64
   depends_on formula: "fileicon"
 
   app "Mercury.app"
 
   postflight do
-    custom_icon = Pathname(__dir__).parent/"Assets/mercury-browser-macos15.icns"
+    custom_icon = File.expand_path("../Assets/mercury-browser-macos15.icns", __dir__)
 
-    if custom_icon.exist?
-      system_command "#{HOMEBREW_PREFIX}/bin/fileicon",
-                     args: ["set", "#{appdir}/Mercury.app", custom_icon.to_s]
-    else
-      opoo "Mercury custom icon was not found at #{custom_icon}"
-    end
+    system_command "#{HOMEBREW_PREFIX}/bin/fileicon",
+                   args: ["set", "#{appdir}/Mercury.app", custom_icon]
   end
 
   uninstall quit: "com.alex313031.mercury.com.alex313031.mercury"
 
   zap trash: [
-    "/Library/Logs/DiagnosticReports/mercury_*",
-    "~/Library/Application Support/mercury",
-    "~/Library/Caches/mercury",
-    "~/Library/Saved Application State/com.alex313031.mercury.com.alex313031.mercury.savedState",
-  ]
-
-  rmdir "~/Library/Application Support/Mozilla"
+        "/Library/Logs/DiagnosticReports/mercury_*",
+        "~/Library/Application Support/mercury",
+        "~/Library/Caches/mercury",
+        "~/Library/Saved Application State/com.alex313031.mercury.com.alex313031.mercury.savedState",
+      ],
+      rmdir: "~/Library/Application Support/Mozilla"
 end
