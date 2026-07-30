@@ -15,9 +15,17 @@ cask "wetype" do
   auto_updates true
   depends_on macos: :catalina
 
-  installer manual: "WeTypeInstaller_#{version.csv.first}_#{version.csv.second}.app"
+  input_method "WeType.app"
 
-  uninstall delete: "/Library/Input Methods/WeType.app"
+  preflight do
+    system_command "/usr/bin/unzip",
+                   args: [
+                     "-qq",
+                     "#{staged_path}/WeTypeInstaller_#{version.csv.first}_#{version.csv.second}.app/Contents/Resources/wetype.zip",
+                     "-d",
+                     staged_path,
+                   ]
+  end
 
   zap trash: [
     "~/Library/Application Support/WeType",
