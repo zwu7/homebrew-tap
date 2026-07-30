@@ -1,22 +1,19 @@
 cask "wechat" do
-  version "3.8.10.17"
-  sha256 :no_check
+  version "4.1.8.29,36603"
+  sha256 "4305970f2263a8dd8207574e6536f952fe2a538cbc925525b144b5372e8cfda7"
 
-  url "https://dldir1.qq.com/weixin/mac/WeChatMac.dmg"
+  url "https://dldir1.qq.com/weixin/Universal/Mac/xWeChatMac_universal_#{version.csv.first}_#{version.csv.second}.dmg"
   name "WeChat for Mac"
   name "微信 Mac 版"
   desc "Free messaging and calling application"
   homepage "https://mac.weixin.qq.com/"
 
-  # This appcast is slower to update than the submissions we get. See:
-  #   https://github.com/Homebrew/homebrew-cask/pull/90907#issuecomment-710107547
   livecheck do
-    url "https://dldir1.qq.com/weixin/mac/mac-release.xml"
-    strategy :sparkle, &:short_version
+    skip "Pinned to the first reliably confirmed Mac release with scrolling screenshots"
   end
 
   auto_updates true
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :big_sur
 
   app "WeChat.app"
 
