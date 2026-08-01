@@ -2,93 +2,104 @@
 
 ## Install
 
+Disconnect the Samsung phone during installation:
+
 ```bash
 brew tap zwu7/tap
 brew install --cask zwu7/tap/samsung-dex-macos-revived
 open "/Applications/Samsung DeX Revived.app"
 ```
 
-The cask downloads Samsung DeX for Mac 2.4.0.21 from an archived installer. Because the archive URL is unversioned, Homebrew requires `sha256 :no_check`; before creating the revived runtime, the tap verifies the installed vendor app by exact version, executable SHA-256, Info.plist SHA-256, valid code signature, and Samsung Team ID `8S33FS7Q5Q`.
+The cask downloads Samsung DeX for Mac 2.4.0.21 from an archived vendor installer. The archive URL is unversioned, so Homebrew requires `sha256 :no_check`. Before creating the revived app, the installer verifies the exact vendor version, executable SHA-256, Info.plist SHA-256, Samsung code signature, and Team ID `8S33FS7Q5Q`.
 
-The tap does **not** redistribute Samsung's proprietary application binary or DMG.
+The tap does not redistribute Samsung's proprietary application, package, or DMG.
 
-## Compatibility mechanism
+## Why the compatibility layer is needed
 
-Current phone-side `com.sec.android.app.dexonpc` code explicitly stops a session when TerminalInfo declares `SinkType = MAC` on devices whose `ro.product.first_api_level` is at least 31.
+The phone-side `com.sec.android.app.dexonpc` version tested on 2026-08-01 explicitly stops a session when TerminalInfo declares `SinkType = MAC` on a device whose first API level is at least 31.
 
-The revived runtime:
-
-1. keeps Samsung DeX for Mac `2.4.0.21`;
-2. extracts its x86_64 executable;
-3. runs it under Rosetta 2;
-4. injects a small Objective-C runtime shim;
-5. changes only `MCTerminalInfoRequestMessage.setSinkType:` from `MAC` to the phone-recognized value `Windows`.
-
-No `PcVer` or `SinkOSVersion` spoofing is used.
-
-## Revision 5 startup and USB detection fix
-
-The protocol shim was already correct in revision 2, but a normal `open` could still activate the original application because both bundles used `com.samsung.DeXonPC`. In addition, immediately after package installation the vendor connectivity daemon could remain in a stale running state.
-
-Revision 5 retains the startup fixes and corrects the install guard:
-
-- `/Applications/Samsung DeX Revived.app` is now a small outer launcher with the unique bundle identifier `com.zwu7.SamsungDeXRevived`;
-- the unmodified-identity Samsung runtime is embedded inside the launcher and executed directly, bypassing LaunchServices bundle selection;
-- the cask restarts `system/com.devguru.ssconnservice2` after installation;
-- the launcher repairs the service with an administrator prompt only when the service is missing.
-
-The successful runtime probe on 2026-08-01 confirmed:
-
-- `com.devguru.ssconnservice2` running after kickstart;
-- direct execution of `Samsung DeX.real`;
-- `libDexSinkTypeWindowsShim.dylib` loaded in the process;
-- `HOOK_INSTALLED=yes`;
-- successful phone recognition and a usable DeX session.
-
-## Files installed
+The compatibility shim changes only:
 
 ```text
-/Applications/Samsung DeX.app
+SinkType: MAC -> Windows
+```
+
+It does not spoof `PcVer` or `SinkOSVersion`.
+
+## Revision 6: validated top-level layout
+
+Revision 6 is based on the final successful local validation rather than the failed nested-runtime design used in revisions 3-5.
+
+It installs one visible application:
+
+```text
 /Applications/Samsung DeX Revived.app
 ```
 
-The first is Samsung's original application. The second is the tap-managed launcher and embedded revived runtime.
+The app is a complete top-level Samsung bundle:
 
-## Maintenance commands
+```text
+Samsung DeX Revived.app
+├── Contents/Info.plist
+├── Contents/MacOS/Samsung DeX
+├── Contents/MacOS/Samsung DeX.real
+├── Contents/Frameworks/libDexSinkTypeWindowsShim.dylib
+└── Contents/Resources/DeXonPC.icns
+```
+
+The package-installed, code-signed vendor source is retained outside Applications for verification and repair:
+
+```text
+/Library/Application Support/Samsung DeX Revived/Vendor/Samsung DeX.app
+```
+
+It is not registered as a visible application.
+
+The final validation on 2026-08-01 passed all four checks:
+
+```text
+MAIN_UI=y
+FULL_DEX=y
+INPUT_OK=y
+SECOND_NORMAL_LAUNCH=y
+```
+
+The runtime log also confirmed `SinkType = Windows` and a successful `MCTerminalInfoResponseMessage`.
+
+## Accessibility permission
+
+macOS may require one-time approval:
+
+```text
+System Settings -> Privacy & Security -> Accessibility
+```
+
+Add or enable `/Applications/Samsung DeX Revived.app`, then open it again. The wrapper opens the correct settings pane when the old DeX runtime reports that Accessibility is denied.
+
+## Maintenance
 
 ```bash
 INSTALLER=/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh
 
-# Verify the launcher, embedded runtime, shim, and signatures
+# Verify the top-level app and hidden vendor source
 "$INSTALLER" verify
 
-# Restart the vendor connectivity service and launch with hook verification
+# Restart the connectivity service and launch through normal LaunchServices
 "$INSTALLER" launch
 
-# Restart only the vendor connectivity service
-"$INSTALLER" repair-service
+# Open the Accessibility pane and reveal the exact app
+"$INSTALLER" permission-help
 
-# Rebuild the launcher from the installed original application
-"$INSTALLER" install
+# Restart only the Samsung connectivity service
+"$INSTALLER" repair-service
 ```
 
-## Scope and safety
+## Safety and scope
 
 - Apple silicon only.
 - Rosetta 2 is installed through Apple `softwareupdate` when missing.
-- The original Samsung application is not modified.
+- Only one DeX application is visible in Applications.
 - SIP and Startup Security are not changed.
-- The obsolete Samsung/Devguru KEXT is not forced to load.
-- The compatibility layer is unsupported by Samsung and may need another revision if the phone-side protocol changes.
-
-
-## Install and reinstall safety
-
-Samsung's vendor installer refuses to run while a Samsung USB device is attached.
-Revision 5 checks for a live USB device whose product identity is
-`SAMSUNG_Android` and whose vendor ID is `0x04e8`. It no longer treats every
-Samsung-branded USB device or text match as a connected phone. This prevents
-false positives from Samsung displays, storage devices, or persistent USB
-metadata while still stopping a reinstall before the vendor package can reject
-an actually connected phone. Disconnect the phone, complete the Homebrew
-command, then reconnect it for DeX use.
+- The obsolete Samsung KEXT is not forced to load.
+- Samsung phones must be disconnected during install, reinstall, and uninstall.
+- The compatibility layer is unsupported by Samsung and may need another revision if the phone protocol changes.

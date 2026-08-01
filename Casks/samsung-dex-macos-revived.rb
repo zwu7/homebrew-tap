@@ -1,8 +1,8 @@
 cask "samsung-dex-macos-revived" do
-  version "2.4.0.21,5"
+  version "2.4.0.21,6"
   # The archived vendor URL is unversioned, so Homebrew requires :no_check.
-  # The postflight installer independently verifies the exact installed app,
-  # including its binary hash, Info.plist hash, code signature, and Team ID.
+  # The postflight installer independently verifies the exact vendor app,
+  # executable hash, Info.plist hash, code signature, and Samsung Team ID.
   sha256 :no_check
 
   url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg",
@@ -35,8 +35,6 @@ cask "samsung-dex-macos-revived" do
                    args: [
                      revival_installer.to_s,
                      "install",
-                     "--target-app",
-                     "/Applications/Samsung DeX Revived.app",
                      "--no-launch",
                    ]
   end
@@ -51,10 +49,7 @@ cask "samsung-dex-macos-revived" do
   end
 
   uninstall launchctl: "com.devguru.ssconnservice2",
-            quit:      [
-              "com.samsung.DeXonPC",
-              "com.zwu7.SamsungDeXRevived",
-            ],
+            quit:      "com.samsung.DeXonPC",
             pkgutil:   [
               "com.samsung.pkg.dexonpc",
               "com.samsung.pkg.mss_connectivity2",
@@ -62,7 +57,8 @@ cask "samsung-dex-macos-revived" do
             ],
             delete:    [
               "/Applications/Samsung DeX Revived.app",
-              "/Library/Extensions/ssuddrv.kext",
+              "/Applications/Samsung DeX.app",
+              "/Library/Application Support/Samsung DeX Revived",
             ]
 
   zap trash: [
@@ -71,39 +67,37 @@ cask "samsung-dex-macos-revived" do
     "~/Library/HTTPStorages/com.samsung.DeXonPC",
     "~/Library/Logs/Samsung DeX Revived",
     "~/Library/Preferences/com.samsung.DeXonPC.plist",
-    "~/Library/Preferences/com.zwu7.SamsungDeXRevived.plist",
     "~/Library/Saved Application State/com.samsung.DeXonPC.savedState",
-    "~/Library/Saved Application State/com.zwu7.SamsungDeXRevived.savedState",
   ]
 
   caveats <<~EOS
     This cask installs Rosetta 2 through Apple's softwareupdate when Rosetta
     is not already available. macOS may request an administrator password.
 
-    It installs Samsung's archived, discontinued DeX for Mac 2.4.0.21
-    package, verifies the exact vendor application and Samsung code signature,
-    then creates a separate launcher at:
+    It installs Samsung's archived DeX for Mac 2.4.0.21 package, verifies the
+    exact vendor application and Samsung code signature, and creates one visible
+    application:
 
       /Applications/Samsung DeX Revived.app
 
-    Revision 5 uses a unique launcher bundle identifier and directly starts an
-    embedded x86_64 runtime. This prevents LaunchServices from activating the
-    unmodified original DeX application. Installation also restarts Samsung's
-    connectivity service so the first launch can detect the phone.
+    Revision 6 uses the fully validated top-level bundle layout. It preserves
+    Samsung's original icon, resources, bundle identifier, and user interface;
+    replaces the top-level executable with a wrapper; runs the vendor x86_64
+    executable under Rosetta 2; and injects the compatibility shim from the same
+    top-level bundle. There is no nested runtime application and no second visible
+    Samsung DeX application.
 
-    The runtime changes only the TerminalInfo SinkType value from MAC to
-    Windows. The original /Applications/Samsung DeX.app remains unchanged.
+    The shim changes only TerminalInfo SinkType from MAC to Windows. PcVer and
+    SinkOSVersion are not spoofed. The validated session produced a full DeX
+    desktop, working Mac keyboard/mouse input, and a successful second normal
+    Finder/open launch.
 
-    The compatibility layer was validated on 2026-08-01 with a full DeX
-    desktop and working Mac keyboard/mouse input. It does not disable SIP,
-    lower Startup Security, or load the obsolete Samsung KEXT.
+    Disconnect Samsung phones before install, reinstall, or uninstall. Reconnect
+    the phone only after Homebrew reports that installation has completed.
 
-    Disconnect Samsung phones before install, reinstall, or uninstall. The cask
-    checks specifically for a live SAMSUNG_Android USB device before any
-    destructive uninstall step. Other Samsung-branded USB peripherals do not
-    trigger this guard. Reconnect the
-    phone after installation completes.
+    macOS may require one-time Accessibility approval for Samsung DeX Revived:
+      System Settings -> Privacy & Security -> Accessibility
 
-    Launch "Samsung DeX Revived", not the original app.
+    Launch "Samsung DeX Revived" from Applications after installation.
   EOS
 end
