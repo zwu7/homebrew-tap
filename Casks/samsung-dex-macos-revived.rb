@@ -1,5 +1,5 @@
 cask "samsung-dex-macos-revived" do
-  version "2.4.0.21,4"
+  version "2.4.0.21,5"
   # The archived vendor URL is unversioned, so Homebrew requires :no_check.
   # The postflight installer independently verifies the exact installed app,
   # including its binary hash, Info.plist hash, code signature, and Team ID.
@@ -86,7 +86,7 @@ cask "samsung-dex-macos-revived" do
 
       /Applications/Samsung DeX Revived.app
 
-    Revision 4 uses a unique launcher bundle identifier and directly starts an
+    Revision 5 uses a unique launcher bundle identifier and directly starts an
     embedded x86_64 runtime. This prevents LaunchServices from activating the
     unmodified original DeX application. Installation also restarts Samsung's
     connectivity service so the first launch can detect the phone.
@@ -99,8 +99,9 @@ cask "samsung-dex-macos-revived" do
     lower Startup Security, or load the obsolete Samsung KEXT.
 
     Disconnect Samsung phones before install, reinstall, or uninstall. The cask
-    checks before any destructive uninstall step and exits without changing the
-    existing installation when a Samsung USB device is connected. Reconnect the
+    checks specifically for a live SAMSUNG_Android USB device before any
+    destructive uninstall step. Other Samsung-branded USB peripherals do not
+    trigger this guard. Reconnect the
     phone after installation completes.
 
     Launch "Samsung DeX Revived", not the original app.

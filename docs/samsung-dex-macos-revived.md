@@ -26,11 +26,11 @@ The revived runtime:
 
 No `PcVer` or `SinkOSVersion` spoofing is used.
 
-## Revision 4 startup fix
+## Revision 5 startup and USB detection fix
 
 The protocol shim was already correct in revision 2, but a normal `open` could still activate the original application because both bundles used `com.samsung.DeXonPC`. In addition, immediately after package installation the vendor connectivity daemon could remain in a stale running state.
 
-Revision 4 fixes both startup conditions:
+Revision 5 retains the startup fixes and corrects the install guard:
 
 - `/Applications/Samsung DeX Revived.app` is now a small outer launcher with the unique bundle identifier `com.zwu7.SamsungDeXRevived`;
 - the unmodified-identity Samsung runtime is embedded inside the launcher and executed directly, bypassing LaunchServices bundle selection;
@@ -85,7 +85,10 @@ INSTALLER=/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-reviv
 ## Install and reinstall safety
 
 Samsung's vendor installer refuses to run while a Samsung USB device is attached.
-Revision 4 checks for the Samsung USB vendor ID before Homebrew begins an install
-or uninstall phase. This prevents `brew reinstall` from removing a working copy
-before the vendor installer rejects the connected phone. Disconnect the phone,
-complete the Homebrew command, then reconnect it for DeX use.
+Revision 5 checks for a live USB device whose product identity is
+`SAMSUNG_Android` and whose vendor ID is `0x04e8`. It no longer treats every
+Samsung-branded USB device or text match as a connected phone. This prevents
+false positives from Samsung displays, storage devices, or persistent USB
+metadata while still stopping a reinstall before the vendor package can reject
+an actually connected phone. Disconnect the phone, complete the Homebrew
+command, then reconnect it for DeX use.

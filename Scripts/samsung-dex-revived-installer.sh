@@ -89,16 +89,20 @@ run_as_root() {
 }
 
 samsung_usb_connected() {
-  local usb_tree
+  local usb_tree usb_profile
   usb_tree="$(/usr/sbin/ioreg -p IOUSB -l -w 0 2>/dev/null || true)"
 
-  # Samsung Electronics USB vendor ID: 0x04e8 (decimal 1256).
-  if /usr/bin/grep -Eq '"idVendor"[[:space:]]*=[[:space:]]*(1256|0x0*4e8)' <<<"$usb_tree"; then
+  # Detect an attached Samsung Android phone, not every Samsung-branded USB
+  # device. The prior vendor-only/text fallback produced false positives for
+  # unrelated Samsung peripherals and persistent USB descriptions.
+  if /usr/bin/grep -Fq 'SAMSUNG_Android' <<<"$usb_tree" &&      /usr/bin/grep -Eq '"idVendor"[[:space:]]*=[[:space:]]*(1256|0x0*4[eE]8|<e8040000>)' <<<"$usb_tree"; then
     return 0
   fi
 
-  # Fallback for ioreg variants that expose the vendor as text only.
-  if /usr/bin/grep -Eqi 'Samsung|0x04e8' <<<"$usb_tree"; then
+  # system_profiler is slower, so use it only as a live-device fallback for
+  # macOS variants whose ioreg output omits the USB product string.
+  usb_profile="$(/usr/sbin/system_profiler SPUSBDataType 2>/dev/null || true)"
+  if /usr/bin/grep -Eq '^[[:space:]]*SAMSUNG_Android:' <<<"$usb_profile" &&      /usr/bin/grep -Eqi 'Vendor ID:[[:space:]]*0x0*4e8' <<<"$usb_profile"; then
     return 0
   fi
 
