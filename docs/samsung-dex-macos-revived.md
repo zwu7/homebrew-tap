@@ -8,27 +8,17 @@ brew install --cask zwu7/tap/samsung-dex-macos-revived
 open "/Applications/Samsung DeX Revived.app"
 ```
 
-The cask downloads the archived Samsung DeX for Mac 2.4.0.21 installer using a fixed SHA-256. The tap does **not** redistribute Samsung's application binary or DMG.
+The cask downloads Samsung DeX for Mac 2.4.0.21 from an archived installer. Because the archive URL is unversioned, Homebrew requires `sha256 :no_check`; before creating the revived runtime, the tap verifies the installed vendor app by exact version, executable SHA-256, Info.plist SHA-256, valid code signature, and Samsung Team ID `8S33FS7Q5Q`.
 
-After installing the vendor package, the tap-maintained installer creates a separate application:
-
-```text
-/Applications/Samsung DeX Revived.app
-```
-
-The original application remains at:
-
-```text
-/Applications/Samsung DeX.app
-```
+The tap does **not** redistribute Samsung's proprietary application binary or DMG.
 
 ## Compatibility mechanism
 
-Recent phone-side `com.sec.android.app.dexonpc` builds explicitly stop the session when TerminalInfo declares `SinkType = MAC` on devices with `ro.product.first_api_level >= 31`.
+Current phone-side `com.sec.android.app.dexonpc` code explicitly stops a session when TerminalInfo declares `SinkType = MAC` on devices whose `ro.product.first_api_level` is at least 31.
 
-The revived copy:
+The revived runtime:
 
-1. keeps Samsung DeX for Mac version `2.4.0.21`;
+1. keeps Samsung DeX for Mac `2.4.0.21`;
 2. extracts its x86_64 executable;
 3. runs it under Rosetta 2;
 4. injects a small Objective-C runtime shim;
@@ -36,34 +26,57 @@ The revived copy:
 
 No `PcVer` or `SinkOSVersion` spoofing is used.
 
-## Verified result
+## Revision 3 startup fix
 
-On 2026-08-01, the single-variable change produced:
+The protocol shim was already correct in revision 2, but a normal `open` could still activate the original application because both bundles used `com.samsung.DeXonPC`. In addition, immediately after package installation the vendor connectivity daemon could remain in a stale running state.
 
-- `MCTerminalInfoResponseMessage`;
-- successful KMS and PSS state changes;
-- screen sharing and streaming;
-- an enabled DeX desktop;
-- working Mac keyboard and mouse input.
+Revision 3 fixes both startup conditions:
 
-## Scope and safety
+- `/Applications/Samsung DeX Revived.app` is now a small outer launcher with the unique bundle identifier `com.zwu7.SamsungDeXRevived`;
+- the unmodified-identity Samsung runtime is embedded inside the launcher and executed directly, bypassing LaunchServices bundle selection;
+- the cask restarts `system/com.devguru.ssconnservice2` after installation;
+- the launcher repairs the service with an administrator prompt only when the service is missing.
 
-- Apple silicon only.
-- Rosetta 2 is required.
-- The original Samsung app is not modified.
-- SIP and Startup Security are not changed.
-- The obsolete Samsung/Devguru KEXT is not forced to load.
-- The compatibility layer is unsupported by Samsung and may require updates if the phone-side protocol changes again.
+The successful runtime probe on 2026-08-01 confirmed:
+
+- `com.devguru.ssconnservice2` running after kickstart;
+- direct execution of `Samsung DeX.real`;
+- `libDexSinkTypeWindowsShim.dylib` loaded in the process;
+- `HOOK_INSTALLED=yes`;
+- successful phone recognition and a usable DeX session.
+
+## Files installed
+
+```text
+/Applications/Samsung DeX.app
+/Applications/Samsung DeX Revived.app
+```
+
+The first is Samsung's original application. The second is the tap-managed launcher and embedded revived runtime.
 
 ## Maintenance commands
 
 ```bash
-# Verify the generated app
-/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh verify
+INSTALLER=/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh
 
-# Launch and verify that the hook loads
-/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh launch
+# Verify the launcher, embedded runtime, shim, and signatures
+"$INSTALLER" verify
 
-# Rebuild the revived copy from the installed original
-/opt/homebrew/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh install
+# Restart the vendor connectivity service and launch with hook verification
+"$INSTALLER" launch
+
+# Restart only the vendor connectivity service
+"$INSTALLER" repair-service
+
+# Rebuild the launcher from the installed original application
+"$INSTALLER" install
 ```
+
+## Scope and safety
+
+- Apple silicon only.
+- Rosetta 2 is installed through Apple `softwareupdate` when missing.
+- The original Samsung application is not modified.
+- SIP and Startup Security are not changed.
+- The obsolete Samsung/Devguru KEXT is not forced to load.
+- The compatibility layer is unsupported by Samsung and may need another revision if the phone-side protocol changes.

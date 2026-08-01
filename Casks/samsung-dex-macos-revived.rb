@@ -1,9 +1,11 @@
 cask "samsung-dex-macos-revived" do
-  version "2.4.0.21,1"
-  sha256 "6bf45739e81ad7970ae86147b64bc1df3392154b00672243fb666c62c983a9f6"
+  version "2.4.0.21,3"
+  # The archived vendor URL is unversioned, so Homebrew requires :no_check.
+  # The postflight installer independently verifies the exact installed app,
+  # including its binary hash, Info.plist hash, code signature, and Team ID.
+  sha256 :no_check
 
-  # Keep a version-specific cache key while retaining SHA-256 verification.
-  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg?version=#{version.csv.first}",
+  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg",
       verified: "archive.org/download/samsung-dex-mac/"
   name "Samsung DeX for Mac Revived"
   desc "Legacy DeX client with a local protocol compatibility shim"
@@ -31,7 +33,10 @@ cask "samsung-dex-macos-revived" do
   end
 
   uninstall launchctl: "com.devguru.ssconnservice2",
-            quit:      "com.samsung.DeXonPC",
+            quit:      [
+              "com.samsung.DeXonPC",
+              "com.zwu7.SamsungDeXRevived",
+            ],
             kext:      [
               "com.devguru.driver.SamsungACMControl",
               "com.devguru.driver.SamsungACMData",
@@ -55,28 +60,33 @@ cask "samsung-dex-macos-revived" do
     "~/Library/HTTPStorages/com.samsung.DeXonPC",
     "~/Library/Logs/Samsung DeX Revived",
     "~/Library/Preferences/com.samsung.DeXonPC.plist",
+    "~/Library/Preferences/com.zwu7.SamsungDeXRevived.plist",
     "~/Library/Saved Application State/com.samsung.DeXonPC.savedState",
+    "~/Library/Saved Application State/com.zwu7.SamsungDeXRevived.savedState",
   ]
 
   caveats <<~EOS
-    This cask requires Rosetta 2. Install it first if needed:
+    This cask installs Rosetta 2 through Apple's softwareupdate when Rosetta
+    is not already available. macOS may request an administrator password.
 
-      softwareupdate --install-rosetta --agree-to-license
-
-    This cask installs Samsung's archived, discontinued DeX for Mac 2.4.0.21
-    package, then creates a separate local application at:
+    It installs Samsung's archived, discontinued DeX for Mac 2.4.0.21
+    package, verifies the exact vendor application and Samsung code signature,
+    then creates a separate launcher at:
 
       /Applications/Samsung DeX Revived.app
 
-    The revived copy runs the x86_64 client under Rosetta 2 and changes only
-    the TerminalInfo SinkType value from MAC to Windows at runtime. The
-    original /Applications/Samsung DeX.app remains unchanged.
+    Revision 3 uses a unique launcher bundle identifier and directly starts an
+    embedded x86_64 runtime. This prevents LaunchServices from activating the
+    unmodified original DeX application. Installation also restarts Samsung's
+    connectivity service so the first launch can detect the phone.
+
+    The runtime changes only the TerminalInfo SinkType value from MAC to
+    Windows. The original /Applications/Samsung DeX.app remains unchanged.
 
     The compatibility layer was validated on 2026-08-01 with a full DeX
     desktop and working Mac keyboard/mouse input. It does not disable SIP,
     lower Startup Security, or load the obsolete Samsung KEXT.
 
-    Disconnect Samsung USB devices during installation if the vendor package
-    asks you to do so. Launch "Samsung DeX Revived", not the original app.
+    Launch "Samsung DeX Revived", not the original app.
   EOS
 end

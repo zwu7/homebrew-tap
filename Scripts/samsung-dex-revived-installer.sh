@@ -2,6 +2,12 @@
 set -euo pipefail
 
 EXPECTED_VERSION="2.4.0.21"
+EXPECTED_ORIGINAL_BIN_SHA256="63bcf82496f2bce5e527160439d2d2fc4610102cfcb9404a5de59c4d45343d98"
+EXPECTED_ORIGINAL_PLIST_SHA256="ded1a223b33714da3ad730175db1542ff9e11b666da5b2a1d821060a2f5a7fc7"
+EXPECTED_TEAM_IDENTIFIER="8S33FS7Q5Q"
+OUTER_BUNDLE_ID="com.zwu7.SamsungDeXRevived"
+SERVICE_LABEL="system/com.devguru.ssconnservice2"
+SERVICE_PLIST="/Library/LaunchDaemons/com.devguru.ssconnservice2.plist"
 DEFAULT_ORIGINAL_APP="/Applications/Samsung DeX.app"
 DEFAULT_TARGET_APP="/Applications/Samsung DeX Revived.app"
 ORIGINAL_APP="$DEFAULT_ORIGINAL_APP"
@@ -10,17 +16,17 @@ MODE="install"
 LAUNCH_AFTER_INSTALL="no"
 
 usage() {
-  cat <<'EOF'
+  cat <<'USAGE'
 Usage:
-  samsung-dex-revived-installer.sh [install|verify|launch|remove] [options]
+  samsung-dex-revived-installer.sh [install|verify|launch|repair-service|remove] [options]
 
 Options:
   --original-app PATH   Source Samsung DeX.app path
-  --target-app PATH     Revived application path
+  --target-app PATH     Revived launcher application path
   --launch              Launch after install
   --no-launch           Do not launch after install (default)
   -h, --help            Show this help
-EOF
+USAGE
 }
 
 fail() {
@@ -30,7 +36,7 @@ fail() {
 
 while (($#)); do
   case "$1" in
-    install|verify|launch|remove)
+    install|verify|launch|repair-service|remove)
       MODE="$1"
       shift
       ;;
@@ -64,52 +70,103 @@ done
 
 ORIGINAL_BIN="$ORIGINAL_APP/Contents/MacOS/Samsung DeX"
 ORIGINAL_PLIST="$ORIGINAL_APP/Contents/Info.plist"
-TARGET_BIN="$TARGET_APP/Contents/MacOS/Samsung DeX"
-REAL_BIN="$TARGET_APP/Contents/MacOS/Samsung DeX.real"
-SHIM_DYLIB="$TARGET_APP/Contents/Frameworks/libDexSinkTypeWindowsShim.dylib"
+OUTER_BIN="$TARGET_APP/Contents/MacOS/Samsung DeX Revived"
+RUNTIME_APP="$TARGET_APP/Contents/Resources/Samsung DeX Runtime.app"
+RUNTIME_BIN="$RUNTIME_APP/Contents/MacOS/Samsung DeX"
+REAL_BIN="$RUNTIME_APP/Contents/MacOS/Samsung DeX.real"
+SHIM_DYLIB="$RUNTIME_APP/Contents/Frameworks/libDexSinkTypeWindowsShim.dylib"
 LOG_DIR="$HOME/Library/Logs/Samsung DeX Revived"
 MARKER="$LOG_DIR/shim_runtime_probe.txt"
 APP_LOG="$LOG_DIR/app_stdout_stderr.log"
+LAUNCHER_LOG="$LOG_DIR/launcher.log"
+
+run_as_root() {
+  if [[ "$EUID" -eq 0 ]]; then
+    "$@"
+  else
+    /usr/bin/sudo "$@"
+  fi
+}
 
 stop_dex_ui() {
-  pkill -x "Samsung DeX" >/dev/null 2>&1 || true
-  pkill -f "$TARGET_APP/Contents/MacOS/Samsung DeX.real" >/dev/null 2>&1 || true
+  /usr/bin/osascript -e 'tell application id "com.samsung.DeXonPC" to quit' >/dev/null 2>&1 || true
+  /usr/bin/osascript -e 'tell application id "com.zwu7.SamsungDeXRevived" to quit' >/dev/null 2>&1 || true
+  /usr/bin/pkill -x "Samsung DeX" >/dev/null 2>&1 || true
+  /usr/bin/pkill -f '/Applications/Samsung DeX.app/Contents/MacOS/Samsung DeX' >/dev/null 2>&1 || true
+  /usr/bin/pkill -f '/Applications/Samsung DeX Revived.app/Contents/Resources/Samsung DeX Runtime.app/Contents/MacOS/Samsung DeX.real' >/dev/null 2>&1 || true
   sleep 1
 }
 
 check_rosetta() {
-  if ! /usr/bin/arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
-    fail "Rosetta 2 is required. Install it with: softwareupdate --install-rosetta --agree-to-license"
+  if /usr/bin/arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
+    return 0
   fi
+
+  printf '%s\n' 'Rosetta 2 is not installed. Installing it through Apple softwareupdate...'
+  run_as_root /usr/sbin/softwareupdate --install-rosetta --agree-to-license || \
+    fail "Rosetta 2 installation failed."
+
+  /usr/bin/arch -x86_64 /usr/bin/true >/dev/null 2>&1 || \
+    fail "Rosetta 2 is still unavailable after softwareupdate completed."
+}
+
+restart_connectivity_service() {
+  [[ -f "$SERVICE_PLIST" ]] || fail "Samsung connectivity LaunchDaemon plist is missing: $SERVICE_PLIST"
+
+  if ! run_as_root /bin/launchctl print "$SERVICE_LABEL" >/dev/null 2>&1; then
+    run_as_root /bin/launchctl bootstrap system "$SERVICE_PLIST" >/dev/null 2>&1 || true
+  fi
+
+  run_as_root /bin/launchctl kickstart -k "$SERVICE_LABEL" || \
+    fail "Unable to restart Samsung connectivity service."
+  sleep 2
+
+  run_as_root /bin/launchctl print "$SERVICE_LABEL" >/dev/null 2>&1 || \
+    fail "Samsung connectivity service is not registered after restart."
+
+  printf 'SERVICE: com.devguru.ssconnservice2 running\n'
 }
 
 verify_target() {
   [[ -d "$TARGET_APP" ]] || fail "Target app is not installed: $TARGET_APP"
-  [[ -x "$TARGET_BIN" ]] || fail "Launcher is missing: $TARGET_BIN"
+  [[ -x "$OUTER_BIN" ]] || fail "Outer launcher is missing: $OUTER_BIN"
+  [[ -d "$RUNTIME_APP" ]] || fail "Embedded DeX runtime is missing: $RUNTIME_APP"
+  [[ -x "$RUNTIME_BIN" ]] || fail "Runtime launcher is missing: $RUNTIME_BIN"
   [[ -x "$REAL_BIN" ]] || fail "Real DeX binary is missing: $REAL_BIN"
   [[ -f "$SHIM_DYLIB" ]] || fail "SinkType shim is missing: $SHIM_DYLIB"
 
-  local version
-  version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$TARGET_APP/Contents/Info.plist")"
-  [[ "$version" == "$EXPECTED_VERSION" ]] || fail "Unexpected target version: $version"
+  local outer_id outer_version runtime_version
+  outer_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TARGET_APP/Contents/Info.plist")"
+  outer_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$TARGET_APP/Contents/Info.plist")"
+  runtime_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNTIME_APP/Contents/Info.plist")"
 
-  file "$REAL_BIN" | grep -q 'x86_64' || fail "Real DeX binary is not x86_64"
-  file "$SHIM_DYLIB" | grep -q 'x86_64' || fail "SinkType shim is not x86_64"
-  codesign --verify --deep --strict --verbose=2 "$TARGET_APP"
+  [[ "$outer_id" == "$OUTER_BUNDLE_ID" ]] || fail "Unexpected launcher bundle identifier: $outer_id"
+  [[ "$outer_version" == "$EXPECTED_VERSION" ]] || fail "Unexpected launcher version: $outer_version"
+  [[ "$runtime_version" == "$EXPECTED_VERSION" ]] || fail "Unexpected runtime version: $runtime_version"
 
-  printf 'RESULT: VERIFY_OK\nAPP: %s\nVERSION: %s\n' "$TARGET_APP" "$version"
+  /usr/bin/file "$REAL_BIN" | /usr/bin/grep -q 'x86_64' || fail "Real DeX binary is not x86_64"
+  /usr/bin/file "$SHIM_DYLIB" | /usr/bin/grep -q 'x86_64' || fail "SinkType shim is not x86_64"
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$TARGET_APP"
+
+  printf 'RESULT: VERIFY_OK\nAPP: %s\nBUNDLE_ID: %s\nVERSION: %s\n' \
+    "$TARGET_APP" "$outer_id" "$outer_version"
 }
 
 launch_target() {
   verify_target >/dev/null
   check_rosetta
   stop_dex_ui
-  mkdir -p "$LOG_DIR"
-  rm -f "$MARKER"
+  restart_connectivity_service
+  /bin/mkdir -p "$LOG_DIR"
+  /bin/rm -f "$MARKER"
+
+  # The outer app has a unique bundle identifier. Its launcher executes the
+  # embedded Samsung runtime directly, avoiding LaunchServices selection of
+  # the original com.samsung.DeXonPC application.
   /usr/bin/open -n "$TARGET_APP"
 
-  for _ in $(seq 1 150); do
-    if [[ -f "$MARKER" ]] && grep -q '^HOOK_INSTALLED=yes$' "$MARKER"; then
+  for _ in $(/usr/bin/seq 1 200); do
+    if [[ -f "$MARKER" ]] && /usr/bin/grep -Fqx 'HOOK_INSTALLED=yes' "$MARKER"; then
       printf 'RESULT: LAUNCH_OK\nAPP: %s\nHOOK: SinkType MAC -> Windows\nMARKER: %s\n' \
         "$TARGET_APP" "$MARKER"
       return 0
@@ -117,15 +174,15 @@ launch_target() {
     sleep 0.1
   done
 
-  printf 'RESULT: LAUNCHED_BUT_HOOK_NOT_VERIFIED\nAPP: %s\nMARKER: %s\nLOG: %s\n' \
-    "$TARGET_APP" "$MARKER" "$APP_LOG"
+  printf 'RESULT: LAUNCHED_BUT_HOOK_NOT_VERIFIED\nAPP: %s\nMARKER: %s\nLOG: %s\nLAUNCHER_LOG: %s\n' \
+    "$TARGET_APP" "$MARKER" "$APP_LOG" "$LAUNCHER_LOG"
   return 1
 }
 
 case "$MODE" in
   remove)
     stop_dex_ui
-    rm -rf "$TARGET_APP"
+    /bin/rm -rf "$TARGET_APP"
     printf 'RESULT: REMOVED\nAPP: %s\n' "$TARGET_APP"
     exit 0
     ;;
@@ -137,6 +194,11 @@ case "$MODE" in
     launch_target
     exit 0
     ;;
+  repair-service)
+    restart_connectivity_service
+    printf 'RESULT: SERVICE_REPAIRED\n'
+    exit 0
+    ;;
   install)
     ;;
   *)
@@ -144,7 +206,7 @@ case "$MODE" in
     ;;
 esac
 
-[[ "$(uname -m)" == "arm64" ]] || fail "This revival package supports Apple silicon Macs only."
+[[ "$(/usr/bin/uname -m)" == "arm64" ]] || fail "This revival package supports Apple silicon Macs only."
 [[ -x "$ORIGINAL_BIN" ]] || fail "Original Samsung DeX app not found at $ORIGINAL_APP"
 [[ -f "$ORIGINAL_PLIST" ]] || fail "Original Samsung DeX Info.plist not found."
 
@@ -157,37 +219,59 @@ ORIGINAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 [[ "$ORIGINAL_VERSION" == "$EXPECTED_VERSION" ]] || \
   fail "Expected Samsung DeX $EXPECTED_VERSION, found $ORIGINAL_VERSION"
 
-file "$ORIGINAL_BIN" | grep -q 'x86_64' || fail "Original DeX binary does not contain x86_64 code."
+ORIGINAL_BIN_SHA256="$(/usr/bin/shasum -a 256 "$ORIGINAL_BIN" | /usr/bin/awk '{print $1}')"
+[[ "$ORIGINAL_BIN_SHA256" == "$EXPECTED_ORIGINAL_BIN_SHA256" ]] || \
+  fail "Original Samsung DeX binary hash mismatch: $ORIGINAL_BIN_SHA256"
 
-TARGET_PARENT="$(dirname "$TARGET_APP")"
-mkdir -p "$TARGET_PARENT" "$LOG_DIR"
+ORIGINAL_PLIST_SHA256="$(/usr/bin/shasum -a 256 "$ORIGINAL_PLIST" | /usr/bin/awk '{print $1}')"
+[[ "$ORIGINAL_PLIST_SHA256" == "$EXPECTED_ORIGINAL_PLIST_SHA256" ]] || \
+  fail "Original Samsung DeX Info.plist hash mismatch: $ORIGINAL_PLIST_SHA256"
+
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$ORIGINAL_APP" || \
+  fail "Original Samsung DeX code signature verification failed."
+
+TEAM_IDENTIFIER="$(/usr/bin/codesign -dv --verbose=4 "$ORIGINAL_APP" 2>&1 | /usr/bin/awk -F= '/^TeamIdentifier=/{print $2; exit}')"
+[[ "$TEAM_IDENTIFIER" == "$EXPECTED_TEAM_IDENTIFIER" ]] || \
+  fail "Unexpected Samsung DeX TeamIdentifier: ${TEAM_IDENTIFIER:-missing}"
+
+/usr/bin/file "$ORIGINAL_BIN" | /usr/bin/grep -q 'x86_64' || \
+  fail "Original DeX binary does not contain x86_64 code."
+
+TARGET_PARENT="$(/usr/bin/dirname "$TARGET_APP")"
+/bin/mkdir -p "$TARGET_PARENT" "$LOG_DIR"
 [[ -w "$TARGET_PARENT" ]] || fail "Target directory is not writable: $TARGET_PARENT"
 
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/samsung-dex-revived.XXXXXX")"
+STAGE="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/samsung-dex-revived.XXXXXX")"
 BACKUP="${TARGET_APP}.previous.$$"
 INSTALLED_NEW_TARGET="no"
 
 cleanup() {
-  rm -rf "$STAGE"
+  /bin/rm -rf "$STAGE"
   if [[ "$INSTALLED_NEW_TARGET" != "yes" && -d "$BACKUP" && ! -e "$TARGET_APP" ]]; then
-    mv "$BACKUP" "$TARGET_APP" || true
+    /bin/mv "$BACKUP" "$TARGET_APP" || true
   fi
 }
 trap cleanup EXIT INT TERM
 
 stop_dex_ui
-rm -rf "$BACKUP"
-ditto "$ORIGINAL_APP" "$STAGE/Samsung DeX Revived.app"
-STAGE_APP="$STAGE/Samsung DeX Revived.app"
-STAGE_BIN="$STAGE_APP/Contents/MacOS/Samsung DeX"
-STAGE_REAL="$STAGE_APP/Contents/MacOS/Samsung DeX.real"
-STAGE_SHIM="$STAGE_APP/Contents/Frameworks/libDexSinkTypeWindowsShim.dylib"
-SHIM_SRC="$STAGE_APP/Contents/Resources/dex_sinktype_windows_shim.m"
-REVIVAL_INFO="$STAGE_APP/Contents/Resources/REVIVAL_INFO.txt"
+/bin/rm -rf "$BACKUP"
 
-lipo "$STAGE_BIN" -thin x86_64 -output "$STAGE_REAL"
-chmod 755 "$STAGE_REAL"
-rm -f "$STAGE_BIN"
+STAGE_APP="$STAGE/Samsung DeX Revived.app"
+STAGE_CONTENTS="$STAGE_APP/Contents"
+STAGE_OUTER_BIN="$STAGE_CONTENTS/MacOS/Samsung DeX Revived"
+STAGE_RUNTIME_APP="$STAGE_CONTENTS/Resources/Samsung DeX Runtime.app"
+STAGE_RUNTIME_BIN="$STAGE_RUNTIME_APP/Contents/MacOS/Samsung DeX"
+STAGE_REAL="$STAGE_RUNTIME_APP/Contents/MacOS/Samsung DeX.real"
+STAGE_SHIM="$STAGE_RUNTIME_APP/Contents/Frameworks/libDexSinkTypeWindowsShim.dylib"
+SHIM_SRC="$STAGE_RUNTIME_APP/Contents/Resources/dex_sinktype_windows_shim.m"
+REVIVAL_INFO="$STAGE_CONTENTS/Resources/REVIVAL_INFO.txt"
+
+/bin/mkdir -p "$STAGE_CONTENTS/MacOS" "$STAGE_CONTENTS/Resources"
+/usr/bin/ditto "$ORIGINAL_APP" "$STAGE_RUNTIME_APP"
+
+/usr/bin/lipo "$STAGE_RUNTIME_BIN" -thin x86_64 -output "$STAGE_REAL"
+/bin/chmod 755 "$STAGE_REAL"
+/bin/rm -f "$STAGE_RUNTIME_BIN"
 
 cat > "$SHIM_SRC" <<'SHIM'
 #import <Foundation/Foundation.h>
@@ -309,7 +393,7 @@ static void dex_sink_type_shim_start(void) {
 }
 SHIM
 
-clang \
+/usr/bin/clang \
   -arch x86_64 \
   -dynamiclib \
   -framework Foundation \
@@ -317,9 +401,9 @@ clang \
   -Wl,-install_name,@rpath/libDexSinkTypeWindowsShim.dylib \
   -o "$STAGE_SHIM" \
   "$SHIM_SRC"
-chmod 755 "$STAGE_SHIM"
+/bin/chmod 755 "$STAGE_SHIM"
 
-cat > "$STAGE_BIN" <<'LAUNCHER'
+cat > "$STAGE_RUNTIME_BIN" <<'RUNTIME_LAUNCHER'
 #!/bin/bash
 set -euo pipefail
 MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -330,46 +414,137 @@ LOG_DIR="$HOME/Library/Logs/Samsung DeX Revived"
 MARKER="$LOG_DIR/shim_runtime_probe.txt"
 APP_LOG="$LOG_DIR/app_stdout_stderr.log"
 
-mkdir -p "$LOG_DIR"
+/bin/mkdir -p "$LOG_DIR"
 : > "$MARKER"
 : > "$APP_LOG"
 
 export DEX_SINKTYPE_SHIM_MARKER="$MARKER"
 export DYLD_INSERT_LIBRARIES="$SHIM"
 exec "$REAL_BIN" "$@" >>"$APP_LOG" 2>&1
-LAUNCHER
-chmod 755 "$STAGE_BIN"
+RUNTIME_LAUNCHER
+/bin/chmod 755 "$STAGE_RUNTIME_BIN"
+
+cat > "$STAGE_OUTER_BIN" <<'OUTER_LAUNCHER'
+#!/bin/bash
+set -u
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+RUNTIME_LAUNCHER="$APP_DIR/Contents/Resources/Samsung DeX Runtime.app/Contents/MacOS/Samsung DeX"
+SERVICE_LABEL="system/com.devguru.ssconnservice2"
+SERVICE_PLIST="/Library/LaunchDaemons/com.devguru.ssconnservice2.plist"
+LOG_DIR="$HOME/Library/Logs/Samsung DeX Revived"
+LAUNCHER_LOG="$LOG_DIR/launcher.log"
+
+/bin/mkdir -p "$LOG_DIR"
+{
+  echo "[$(/bin/date '+%Y-%m-%d %H:%M:%S %z')] launcher start"
+
+  /usr/bin/osascript -e 'tell application id "com.samsung.DeXonPC" to quit' >/dev/null 2>&1 || true
+  /usr/bin/pkill -x "Samsung DeX" >/dev/null 2>&1 || true
+  /usr/bin/pkill -f '/Applications/Samsung DeX.app/Contents/MacOS/Samsung DeX' >/dev/null 2>&1 || true
+  /usr/bin/pkill -f '/Applications/Samsung DeX Revived.app/Contents/Resources/Samsung DeX Runtime.app/Contents/MacOS/Samsung DeX.real' >/dev/null 2>&1 || true
+  /bin/sleep 1
+
+  if ! /bin/launchctl print "$SERVICE_LABEL" >/dev/null 2>&1; then
+    echo "connectivity service is not registered; requesting administrator repair"
+    /usr/bin/osascript <<APPLESCRIPT
+try
+  do shell script "/bin/launchctl bootstrap system '$SERVICE_PLIST' >/dev/null 2>&1 || true; /bin/launchctl kickstart -k '$SERVICE_LABEL'" with administrator privileges
+on error errorMessage number errorNumber
+  error "Samsung connectivity service could not be started: " & errorMessage number errorNumber
+end try
+APPLESCRIPT
+    /bin/sleep 2
+  fi
+
+  if [[ ! -x "$RUNTIME_LAUNCHER" ]]; then
+    echo "missing runtime launcher: $RUNTIME_LAUNCHER"
+    /usr/bin/osascript -e 'display alert "Samsung DeX Revived is incomplete" message "Reinstall the Homebrew cask." as critical'
+    exit 1
+  fi
+
+  echo "directly launching embedded runtime"
+  /usr/bin/nohup "$RUNTIME_LAUNCHER" >/dev/null 2>&1 &
+  echo "runtime pid=$!"
+} >>"$LAUNCHER_LOG" 2>&1
+
+exit 0
+OUTER_LAUNCHER
+/bin/chmod 755 "$STAGE_OUTER_BIN"
+
+cat > "$STAGE_CONTENTS/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Samsung DeX Revived</string>
+  <key>CFBundleExecutable</key>
+  <string>Samsung DeX Revived</string>
+  <key>CFBundleIdentifier</key>
+  <string>$OUTER_BUNDLE_ID</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Samsung DeX Revived</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$ORIGINAL_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>3</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+
+# Reuse the vendor icon when present.
+if [[ -f "$STAGE_RUNTIME_APP/Contents/Resources/AppIcon.icns" ]]; then
+  /bin/cp "$STAGE_RUNTIME_APP/Contents/Resources/AppIcon.icns" "$STAGE_CONTENTS/Resources/AppIcon.icns"
+  /usr/libexec/PlistBuddy -c 'Add :CFBundleIconFile string AppIcon' "$STAGE_CONTENTS/Info.plist"
+fi
 
 cat > "$REVIVAL_INFO" <<INFO
-Samsung DeX for Mac revival wrapper
-Created: $(date '+%Y-%m-%d %H:%M:%S %z')
+Samsung DeX for Mac revival launcher
+Created: $(/bin/date '+%Y-%m-%d %H:%M:%S %z')
+Tap compatibility revision: 3
 Vendor version: $ORIGINAL_VERSION
+Outer bundle identifier: $OUTER_BUNDLE_ID
 Compatibility change: TerminalInfo SinkType MAC -> Windows
 Architecture: x86_64 under Rosetta 2
 Original application: $ORIGINAL_APP
 Original application changed: no
-Original binary SHA-256: $(shasum -a 256 "$ORIGINAL_BIN" | awk '{print $1}')
+Original binary SHA-256: $ORIGINAL_BIN_SHA256
+Original Info.plist SHA-256: $ORIGINAL_PLIST_SHA256
+Original TeamIdentifier: $TEAM_IDENTIFIER
+Runtime startup: unique outer launcher -> direct embedded runtime execution
+Connectivity startup: vendor service restarted at installation; repaired on launch if missing
 Validation basis: full DeX desktop and keyboard/mouse input verified on 2026-08-01
 INFO
 
-xattr -dr com.apple.quarantine "$STAGE_APP" 2>/dev/null || true
-codesign --force --sign - --timestamp=none "$STAGE_SHIM"
-codesign --force --deep --sign - --timestamp=none "$STAGE_APP"
-codesign --verify --deep --strict --verbose=2 "$STAGE_APP"
-file "$STAGE_REAL" | grep -q 'x86_64' || fail "Staged real binary is not x86_64."
-file "$STAGE_SHIM" | grep -q 'x86_64' || fail "Staged shim is not x86_64."
+/usr/bin/xattr -dr com.apple.quarantine "$STAGE_APP" 2>/dev/null || true
+/usr/bin/codesign --force --sign - --timestamp=none "$STAGE_SHIM"
+/usr/bin/codesign --force --deep --sign - --timestamp=none "$STAGE_RUNTIME_APP"
+/usr/bin/codesign --force --deep --sign - --timestamp=none "$STAGE_APP"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$STAGE_APP"
+/usr/bin/file "$STAGE_REAL" | /usr/bin/grep -q 'x86_64' || fail "Staged real binary is not x86_64."
+/usr/bin/file "$STAGE_SHIM" | /usr/bin/grep -q 'x86_64' || fail "Staged shim is not x86_64."
 
 if [[ -d "$TARGET_APP" ]]; then
-  mv "$TARGET_APP" "$BACKUP"
+  /bin/mv "$TARGET_APP" "$BACKUP"
 fi
-mv "$STAGE_APP" "$TARGET_APP"
+/bin/mv "$STAGE_APP" "$TARGET_APP"
 INSTALLED_NEW_TARGET="yes"
-rm -rf "$BACKUP"
+/bin/rm -rf "$BACKUP"
 trap - EXIT INT TERM
-rm -rf "$STAGE"
+/bin/rm -rf "$STAGE"
 
 verify_target >/dev/null
-printf 'RESULT: INSTALL_OK\nAPP: %s\nORIGINAL_APP_UNCHANGED: yes\nHOOK: SinkType MAC -> Windows\n' "$TARGET_APP"
+restart_connectivity_service
+printf 'RESULT: INSTALL_OK\nAPP: %s\nBUNDLE_ID: %s\nORIGINAL_APP_UNCHANGED: yes\nHOOK: SinkType MAC -> Windows\nSERVICE_RESTARTED: yes\n' \
+  "$TARGET_APP" "$OUTER_BUNDLE_ID"
 
 if [[ "$LAUNCH_AFTER_INSTALL" == "yes" ]]; then
   launch_target
