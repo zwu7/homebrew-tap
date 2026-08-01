@@ -8,8 +8,6 @@ cask "android-platform-tools-stable" do
   desc "Pinned non-Canary Android command-line platform tools"
   homepage "https://developer.android.com/tools/releases/platform-tools"
 
-  no_autobump! because: "Pinned to the latest non-Canary Platform-Tools release"
-
   conflicts_with cask: "android-platform-tools"
 
   binary "platform-tools/adb"

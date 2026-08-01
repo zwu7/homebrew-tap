@@ -19,20 +19,13 @@ cask "scrcpy-static" do
 
   bundle_dir = "#{staged_path}/scrcpy-macos-#{arch}-v#{version}"
 
+  # The upstream macOS archive is a portable bundle. Launch the real binary
+  # from inside that bundle so it deterministically uses the colocated adb,
+  # scrcpy-server, icons, and statically linked libraries.
   command_wrapper "scrcpy", content: <<~SH
     #!/bin/sh
-    bundle_dir='#{bundle_dir}'
-    export SCRCPY_SERVER_PATH="$bundle_dir/scrcpy-server"
-
-    if command -v adb >/dev/null 2>&1; then
-      export ADB="$(command -v adb)"
-    else
-      export ADB="$bundle_dir/adb"
-    fi
-
-    exec "$bundle_dir/scrcpy" "$@"
+    exec "#{bundle_dir}/scrcpy" "$@"
   SH
-
   manpage "#{bundle_dir}/scrcpy.1"
 
   # No zap stanza required
