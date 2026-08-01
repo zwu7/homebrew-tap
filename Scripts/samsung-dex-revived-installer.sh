@@ -18,7 +18,7 @@ LAUNCH_AFTER_INSTALL="no"
 usage() {
   cat <<'USAGE'
 Usage:
-  samsung-dex-revived-installer.sh [install|verify|launch|repair-service|remove] [options]
+  samsung-dex-revived-installer.sh [install|verify|launch|repair-service|remove|assert-phone-disconnected] [options]
 
 Options:
   --original-app PATH   Source Samsung DeX.app path
@@ -36,7 +36,7 @@ fail() {
 
 while (($#)); do
   case "$1" in
-    install|verify|launch|repair-service|remove)
+    install|verify|launch|repair-service|remove|assert-phone-disconnected)
       MODE="$1"
       shift
       ;;
@@ -86,6 +86,39 @@ run_as_root() {
   else
     /usr/bin/sudo "$@"
   fi
+}
+
+samsung_usb_connected() {
+  local usb_tree
+  usb_tree="$(/usr/sbin/ioreg -p IOUSB -l -w 0 2>/dev/null || true)"
+
+  # Samsung Electronics USB vendor ID: 0x04e8 (decimal 1256).
+  if /usr/bin/grep -Eq '"idVendor"[[:space:]]*=[[:space:]]*(1256|0x0*4e8)' <<<"$usb_tree"; then
+    return 0
+  fi
+
+  # Fallback for ioreg variants that expose the vendor as text only.
+  if /usr/bin/grep -Eqi 'Samsung|0x04e8' <<<"$usb_tree"; then
+    return 0
+  fi
+
+  return 1
+}
+
+assert_phone_disconnected() {
+  if samsung_usb_connected; then
+    cat >&2 <<'MSG'
+RESULT: PHONE_CONNECTED
+Disconnect the Samsung phone before installing, reinstalling, or uninstalling
+Samsung DeX Revived. This check runs before Homebrew removes the existing cask,
+so the current working installation is left unchanged. Reconnect the phone only
+after Homebrew reports that installation has completed.
+MSG
+    exit 1
+  fi
+
+  printf 'RESULT: PHONE_DISCONNECTED
+'
 }
 
 stop_dex_ui() {
@@ -180,6 +213,10 @@ launch_target() {
 }
 
 case "$MODE" in
+  assert-phone-disconnected)
+    assert_phone_disconnected
+    exit 0
+    ;;
   remove)
     stop_dex_ui
     /bin/rm -rf "$TARGET_APP"
