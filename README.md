@@ -1,4 +1,4 @@
-# Zhenyu's Homebrew Tap
+# ZW's Homebrew Tap
 
 [![Homebrew](https://img.shields.io/badge/Homebrew-third--party%20tap-FBB040?logo=homebrew&logoColor=000)](https://brew.sh/)
 [![macOS](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
