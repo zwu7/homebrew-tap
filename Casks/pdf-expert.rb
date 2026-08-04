@@ -13,12 +13,11 @@ cask "pdf-expert" do
   end
 
   auto_updates false
-  depends_on macos: ">= :high_sierra"
-
   conflicts_with cask: [
-    "homebrew/cask/pdf-expert",
     "homebrew/cask-versions/pdf-expert-beta",
+    "homebrew/cask/pdf-expert",
   ]
+  depends_on :macos
 
   app "PDF Expert.app"
 
