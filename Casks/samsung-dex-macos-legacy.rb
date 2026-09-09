@@ -2,8 +2,7 @@ cask "samsung-dex-macos-legacy" do
   version "2.4.0.21"
   sha256 "6bf45739e81ad7970ae86147b64bc1df3392154b00672243fb666c62c983a9f6"
 
-  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg",
-      verified: "archive.org/download/samsung-dex-mac/"
+  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg"
   name "Samsung DeX for Mac"
   desc "Legacy discontinued Samsung DeX desktop client"
   homepage "https://www.samsung.com/us/apps/dex/"

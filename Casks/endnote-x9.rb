@@ -2,8 +2,7 @@ cask "endnote-x9" do
   version "19.3.3.15659,X9"
   sha256 "7266d87c42c5ed57f7ab1d929cc8004737e2ba5ada2e4a5cd60c9e127b52514b"
 
-  url "https://download.endnote.com/downloads/#{version.csv.second}/EndNote#{version.csv.second}Installer.dmg",
-      verified: "download.endnote.com/downloads/#{version.csv.second}/"
+  url "https://download.endnote.com/downloads/#{version.csv.second}/EndNote#{version.csv.second}Installer.dmg"
   name "EndNote X9"
   desc "Reference manager"
   homepage "https://endnote.com/"
@@ -18,20 +17,19 @@ cask "endnote-x9" do
 
   suite "EndNote"
 
-  postflight do
-    [
-      "#{appdir}/EndNote/Spell/Dictionary Converter.app",
-      "#{appdir}/EndNote/Services/ENService.app",
-      "#{appdir}/EndNote/ENService.app",
-      "#{Dir.home}/Library/Services/ENService.app",
+  postflight_steps do
+    remove [
+      "EndNote/Spell/Dictionary Converter.app",
+      "EndNote/Services/ENService.app",
+      "EndNote/ENService.app",
 
       # Old Word CWYW bundles. Word 2008 contains EndNoteCwywHelper.app,
       # which can appear separately in Launchpad.
-      "#{appdir}/EndNote/Cite While You Write/EndNote CWYW Word 2008.bundle",
-      "#{appdir}/EndNote/Cite While You Write/EndNote CWYW Word 2011.bundle",
-    ].each do |path|
-      FileUtils.rm_rf(path) if File.exist?(path)
-    end
+      "EndNote/Cite While You Write/EndNote CWYW Word 2008.bundle",
+      "EndNote/Cite While You Write/EndNote CWYW Word 2011.bundle",
+    ], base: :appdir, recursive: true
+
+    remove "~/Library/Services/ENService.app", recursive: true
   end
 
   zap trash: [

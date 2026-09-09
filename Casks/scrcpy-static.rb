@@ -5,8 +5,7 @@ cask "scrcpy-static" do
   sha256 arm:   "20fd47c9014dd5e0fa77091f3cb7adbda8445a360c4584aeaa0150b5b3988ff3",
          intel: "ee2a7223bc8dbdc4f482db1134bcf441178dafb833492b71ca4c22090c58ce72"
 
-  url "https://github.com/Genymobile/scrcpy/releases/download/v#{version}/scrcpy-macos-#{arch}-v#{version}.tar.gz",
-      verified: "github.com/Genymobile/scrcpy/"
+  url "https://github.com/Genymobile/scrcpy/releases/download/v#{version}/scrcpy-macos-#{arch}-v#{version}.tar.gz"
   name "scrcpy Official Static Build"
   desc "Display and control Android devices using the upstream static build"
   homepage "https://github.com/Genymobile/scrcpy"

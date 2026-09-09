@@ -4,21 +4,19 @@ cask "buzz-captions" do
   on_arm do
     sha256 "956d74ec3db341e04867a4dd727ed22fa8ec629762e505624dcce85a78eb94f8"
 
-    url "https://sourceforge.net/projects/buzz-captions/files/Buzz-#{version}-mac-ARM64.dmg/download",
-        verified: "sourceforge.net/projects/buzz-captions/files/"
+    url "https://sourceforge.net/projects/buzz-captions/files/Buzz-#{version}-mac-ARM64.dmg/download"
   end
   on_intel do
     sha256 "514edaa47841069c9f8953bdb0f3619167ed7a19e93427ec35014a89828d2fbb"
 
-    url "https://sourceforge.net/projects/buzz-captions/files/Buzz-#{version}-mac-X64.dmg/download",
-        verified: "sourceforge.net/projects/buzz-captions/files/"
+    url "https://sourceforge.net/projects/buzz-captions/files/Buzz-#{version}-mac-X64.dmg/download"
   end
 
   name "Buzz"
   desc "Offline audio transcription and translation app powered by Whisper"
   homepage "https://github.com/chidiwilliams/buzz"
 
-  depends_on macos: :catalina
+  depends_on :macos
 
   app "Buzz.app"
 

@@ -5,8 +5,7 @@ cask "samsung-dex-macos-revived" do
   # executable hash, Info.plist hash, code signature, and Samsung Team ID.
   sha256 :no_check
 
-  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg",
-      verified: "archive.org/download/samsung-dex-mac/"
+  url "https://archive.org/download/samsung-dex-mac/SamsungDeXSetupMac.dmg"
   name "Samsung DeX for Mac Revived"
   desc "Legacy DeX client with a local protocol compatibility shim"
   homepage "https://github.com/zwu7/homebrew-tap/blob/main/docs/samsung-dex-macos-revived.md"
@@ -20,32 +19,34 @@ cask "samsung-dex-macos-revived" do
 
   pkg "Install Samsung DeX.pkg"
 
-  preflight do
-    revival_installer = Pathname(__dir__).parent/"Scripts/samsung-dex-revived-installer.sh"
-    system_command "/bin/bash",
-                   args: [
-                     revival_installer.to_s,
-                     "assert-phone-disconnected",
-                   ]
+  preflight_steps do
+    run "/bin/bash",
+        args: [
+          "{{HOMEBREW_PREFIX}}/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh",
+          "assert-phone-disconnected",
+        ]
   end
 
-  postflight do
-    revival_installer = Pathname(__dir__).parent/"Scripts/samsung-dex-revived-installer.sh"
-    system_command "/bin/bash",
-                   args: [
-                     revival_installer.to_s,
-                     "install",
-                     "--no-launch",
-                   ]
+  postflight_steps do
+    run "/bin/bash",
+        args: [
+          "{{HOMEBREW_PREFIX}}/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh",
+          "install",
+          "--no-launch",
+        ],
+        network_access: true,
+        writable_paths: [
+          "/Applications",
+          "/Library",
+        ]
   end
 
-  uninstall_preflight do
-    revival_installer = Pathname(__dir__).parent/"Scripts/samsung-dex-revived-installer.sh"
-    system_command "/bin/bash",
-                   args: [
-                     revival_installer.to_s,
-                     "assert-phone-disconnected",
-                   ]
+  uninstall_preflight_steps do
+    run "/bin/bash",
+        args: [
+          "{{HOMEBREW_PREFIX}}/Library/Taps/zwu7/homebrew-tap/Scripts/samsung-dex-revived-installer.sh",
+          "assert-phone-disconnected",
+        ]
   end
 
   uninstall launchctl: "com.devguru.ssconnservice2",

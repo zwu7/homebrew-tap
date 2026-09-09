@@ -2,8 +2,7 @@ cask "android-platform-tools-stable" do
   version "37.0.0"
   sha256 "094a1395683c509fd4d48667da0d8b5ef4d42b2abfcd29f2e8149e2f989357c7"
 
-  url "https://dl.google.com/android/repository/platform-tools_r#{version}-darwin.zip",
-      verified: "google.com/android/repository/"
+  url "https://dl.google.com/android/repository/platform-tools_r#{version}-darwin.zip"
   name "Android SDK Platform-Tools Stable"
   desc "Pinned non-Canary Android command-line platform tools"
   homepage "https://developer.android.com/tools/releases/platform-tools"

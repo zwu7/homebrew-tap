@@ -2,8 +2,7 @@ cask "microsoft-onedrive-2025-25056" do
   version "25.056.0324.0003"
   sha256 "f3bbd264da8d72f7e95200d87b675028dfb65b16de4dc888a421cb0a156eaa76"
 
-  url "https://oneclient.sfx.ms/Mac/Installers/25.056.0324.0003/universal/OneDrive.pkg",
-      verified: "oneclient.sfx.ms/Mac/Installers/"
+  url "https://oneclient.sfx.ms/Mac/Installers/25.056.0324.0003/universal/OneDrive.pkg"
   name "Microsoft OneDrive 2025 25.056"
   desc "Cloud storage client pinned to OneDrive 2025 25.056"
   homepage "https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage"

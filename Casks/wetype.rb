@@ -13,18 +13,18 @@ cask "wetype" do
   end
 
   auto_updates true
-  depends_on macos: :catalina
+  depends_on :macos
 
   input_method "WeType.app"
 
-  preflight do
-    system_command "/usr/bin/unzip",
-                   args: [
-                     "-qq",
-                     "#{staged_path}/WeTypeInstaller_#{version.csv.first}_#{version.csv.second}.app/Contents/Resources/wetype.zip",
-                     "-d",
-                     staged_path,
-                   ]
+  preflight_steps do
+    run "/usr/bin/unzip",
+        args: [
+          "-qq",
+          "{{staged_path}}/WeTypeInstaller_1.1.1_335.app/Contents/Resources/wetype.zip",
+          "-d",
+          "{{staged_path}}",
+        ]
   end
 
   zap trash: [

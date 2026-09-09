@@ -22,11 +22,14 @@ cask "mercury-browser" do
 
   app "Mercury.app"
 
-  postflight do
-    custom_icon = File.expand_path("../Assets/mercury-browser-macos15.icns", __dir__)
-
-    system_command "#{HOMEBREW_PREFIX}/bin/fileicon",
-                   args: ["set", "#{appdir}/Mercury.app", custom_icon]
+  postflight_steps do
+    run "bin/fileicon",
+        base: :homebrew_prefix,
+        args: [
+          "set",
+          "{{appdir}}/Mercury.app",
+          "{{HOMEBREW_PREFIX}}/Library/Taps/zwu7/homebrew-tap/Assets/mercury-browser-macos15.icns",
+        ]
   end
 
   uninstall quit: "com.alex313031.mercury.com.alex313031.mercury"

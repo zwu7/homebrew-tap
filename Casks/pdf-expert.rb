@@ -2,8 +2,7 @@ cask "pdf-expert" do
   version "2,764"
   sha256 :no_check
 
-  url "https://downloads.pdfexpert.com/versions/#{version.csv.second}/PDFExpert.zip",
-      verified: "downloads.pdfexpert.com/versions/"
+  url "https://downloads.pdfexpert.com/versions/#{version.csv.second}/PDFExpert.zip"
   name "PDF Expert"
   desc "PDF reader, editor and annotator"
   homepage "https://pdfexpert.com/"
