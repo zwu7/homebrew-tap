@@ -1,22 +1,6 @@
-brew tap zwu7/tap
-
-TAP_DIR="$(brew --repository zwu7/tap)"
-VERSION="7.2.9"
-DMG="/tmp/AyuGram-${VERSION}.dmg"
-
-curl -fL --retry 3 \
-  "https://github.com/AyuGram/AyuGramDesktop/releases/download/v${VERSION}/AyuGram.dmg" \
-  -o "$DMG"
-
-if [[ -s "$DMG" ]]; then
-  SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
-
-  mkdir -p "$TAP_DIR/Casks"
-
-  cat > "$TAP_DIR/Casks/ayugram.rb" <<EOF
 cask "ayugram" do
-  version "${VERSION}"
-  sha256 "${SHA}"
+  version "7.2.9"
+  sha256 "b634e44b647d189f656d54e970e95d8afdc8371dd4b4124933732d3b91907a5b"
 
   url "https://github.com/AyuGram/AyuGramDesktop/releases/download/v#{version}/AyuGram.dmg"
   name "AyuGram"
@@ -32,10 +16,3 @@ cask "ayugram" do
     "~/Library/Saved Application State/one.ayugram.AyuGramDesktop.savedState",
   ]
 end
-EOF
-
-  rm -f "$DMG"
-  echo "Created: $TAP_DIR/Casks/ayugram.rb"
-else
-  echo "Download failed; no cask created."
-fi
